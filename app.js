@@ -9,8 +9,11 @@ app.locals = {
     blogTitle: 'Lembubintik.com',
 };
 
+app.set('port', process.env.PORT || 3000);
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
+app.set('contentDir', '_contents/');
+
 
 app.use(logger('dev'));
 app.use(require('less-middleware')(path.join(__dirname, 'public')));
@@ -24,14 +27,21 @@ app.use(express.static(path.join(__dirname, 'public')));
  * @return array
  */
 function extract(type, filename) {
-    var contentPath = path.join(__dirname, '_contents/' + type + '/' + filename + '.md'),
-        source = fs.readFileSync(contentPath).toString(),
+    var contentPath = path.join(__dirname, app.get('contentDir') + type + '/' + filename + '.md'),
         content = '';
-    //split content into arrays
-    content = source.split(/[\n]*[-]{3}[\n]/);
-    content.shift();
 
-    return content;
+    try {
+        var source = fs.readFileSync(contentPath).toString();
+        //split content into arrays
+        content = source.split(/[\n]*[-]{3}[\n]/);
+        content.shift();
+
+        return content;
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            return false;
+        }
+    }
 }
 
 /**
@@ -81,36 +91,42 @@ app.get('/', function(req, res) {
 /**
  * GET page name route
  */
-app.get('/:page_name', function(req, res) {
-    var source = extract('pages', req.params.page_name),
-        meta = getMetadata(source[0]),
-        content = getHtmlContent(source[1]);
+app.get('/:page_name', function(req, res, next) {
+    var source = extract('pages', req.params.page_name);
 
-    res.render('page', { meta: meta, content: content });
+    if ( ! source) {
+        var err = new Error('Not Found');
+        err.status = 404;
+        next(err);
+    } else {
+        var meta = getMetadata(source[0]),
+            content = getHtmlContent(source[1]);
+
+        res.render('page', { meta: meta, content: content });
+    }
 });
     
 /**
  * GET articles route
  */
-app.get('/:category/:post_title', function(req, res) {
-    var source = extract('posts', req.params.category + '/' + req.params.post_title),
-        meta = getMetadata(source[0]),
-        content = getHtmlContent(source[1]);
+app.get('/:category/:post_title', function(req, res, next) {
+    var source = extract('posts', req.params.category + '/' + req.params.post_title);
 
-    res.render('post', { 
-        meta: meta, 
-        content: {excerpt: content[0], fullContent: content.join('')} 
-    });
+    if ( ! source) {
+        var err = new Error('Not Found');
+        err.status = 404;
+        next(err);
+    } else {
+        var meta = getMetadata(source[0]),
+            content = getHtmlContent(source[1]);
+
+        res.render('post', { 
+            meta: meta, 
+            content: {excerpt: content[0], fullContent: content.join('')} 
+        });
+    }
 });
 
-/// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-    var err = new Error('Not Found');
-    err.status = 404;
-    next(err);
-});
-
-/// error handlers
 
 // development error handler
 // will print stacktrace
@@ -134,5 +150,6 @@ app.use(function(err, req, res, next) {
     });
 });
 
-
-module.exports = app;
+var server = app.listen(app.get('port'), function() {
+  console.log('Express server listening on port ' + server.address().port);
+});
