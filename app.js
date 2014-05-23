@@ -1,28 +1,45 @@
-var express = require('express');
-var path = require('path');
-var favicon = require('static-favicon');
-var logger = require('morgan');
-var cookieParser = require('cookie-parser');
-var bodyParser = require('body-parser');
+var express = require('express'),
+    fs = require('fs'),
+    path = require('path'),
+    markdown = require('markdown').markdown,
+    logger = require('morgan'),
+    bodyParser = require('body-parser'),
+    app = express();
 
-var routes = require('./routes/index');
+app.locals = {
+    blogTitle: 'Lembubintik.com',
+};
 
-var app = express();
-app.locals.blogTitle = 'Express Flat Blog';
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 
-app.use(favicon());
 app.use(logger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded());
-app.use(cookieParser());
 app.use(require('less-middleware')(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', routes);
+function getContent(type, filename) {
+    var contentPath = path.join(__dirname, '_contents/' + type + '/' + filename + '.md'),
+        source = fs.readFileSync(contentPath, 'utf8'),
+        content = markdown.toHTML(source);
+
+    return content;
+}
+
+/* ROUTES */
+app.get('/', function(req, res) {
+  res.render('index', { title: 'Express' });
+});
+
+app.get('/:page_name', function(req, res) {
+    var content = getContent('pages', req.params.page_name);
+
+    res.render('page', { page: content });
+});
+
 
 /// catch 404 and forward to error handler
 app.use(function(req, res, next) {
